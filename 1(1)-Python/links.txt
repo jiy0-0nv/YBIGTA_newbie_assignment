@@ -1,9 +1,9 @@
 # 푼 문제만 기입하셔도 됩니다.
 # 형식: <문제번호> <제출 링크>
 
-1260 
+1260 https://www.acmicpc.net/source/96251892
 
-2164 
+2164 https://www.acmicpc.net/source/96253597
 11866 
 
 1629 
