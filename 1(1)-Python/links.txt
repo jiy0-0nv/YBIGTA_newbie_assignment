@@ -4,10 +4,10 @@
 1260 https://www.acmicpc.net/source/96251892
 
 2164 https://www.acmicpc.net/source/96253597
-11866 
+11866 https://www.acmicpc.net/source/96253904
 
-1629 
-10830 
+1629 https://www.acmicpc.net/source/96256075
+10830 https://www.acmicpc.net/source/96264608
 
 3080 
 5670 
