@@ -20,7 +20,7 @@ def rotate_and_remove(queue: deque[int], k: int) -> int:
         e = queue.popleft()
         k -= 1
         if k == 0:
-            return
+            return e
         queue.append(e)
 
 

@@ -12,7 +12,7 @@ class Graph:
         n: 정점의 개수 (1번부터 n번까지)
         """
         self.n = n
-        self.edges = [[] for _ in range(n + 1)]
+        self.edges: List[List[int]] = [[] for _ in range(n + 1)]
         self.is_sorted = False
     
     def sort_edges(self):
