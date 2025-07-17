@@ -55,7 +55,6 @@ echo "[INFO] conda.yml 파일 생성"
 conda env export > ../conda.yaml
 
 # 가상환경 비활성화
-## TODO
 cd ..
 echo "[INFO] 가상환경 비활성화"
 conda deactivate
