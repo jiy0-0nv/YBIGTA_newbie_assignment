@@ -52,7 +52,7 @@ mypy . > ../mypy_log.txt 2>&1
 
 # conda.yml 파일 생성
 echo "[INFO] conda.yml 파일 생성"
-conda enc export > ../conda.yaml
+conda env export > ../conda.yaml
 
 # 가상환경 비활성화
 ## TODO
