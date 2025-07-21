@@ -211,3 +211,7 @@ __marimo__/
 1(2)-CS_basics/output/
 1(2)-CS_basics/submission/
 1(2)-CS_basics/miniconda.sh
+
+# 4(1)-Basic_Statistics_ML
+4(1)-Basic_Statistics_ML/*.csv
+4(1)-Basic_Statistics_ML/*.docx
