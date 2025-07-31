@@ -1,18 +1,21 @@
-# 구현하세요!
 from datasets import load_dataset
 from typing import Optional
 
-def load_corpus() -> list[str]:
+def load_corpus(max_sentences: Optional[int] = 5000) -> list[str]:
     """
-    Wikitext-2 코퍼스를 로드하여
-    학습 가능한 문장 리스트를 반환하는 함수.
+    Args:
+        max_sentences (Optional[int]): 불러올 최대 문장 수
 
     Returns:
-        corpus (list[str]): 빈 문장이 제거된 문장 단위 코퍼스
+        list[str]: 빈 줄 제거 후 문장 단위로 추출
     """
-    ds = load_dataset("wikitext", "wikitext-2-raw-v1", split="train")
-    corpus: list[str] = [
-        line for line in ds["text"]
+    # train split에서 앞 max_sentences개 문장만 로드
+    split = f"train[:{max_sentences}]" if max_sentences is not None else "train"
+    ds = load_dataset("sms_spam", split="train")
+
+    # 빈 문자열/공백만 있는 줄 제거
+    corpus = [
+        line for line in ds["sms"]
         if line is not None and line.strip() != ""
     ]
     # 구현하세요!

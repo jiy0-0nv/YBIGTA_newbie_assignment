@@ -1,19 +1,15 @@
 import time
 import torch
-from torch import nn, Tensor, LongTensor
+from torch import nn, Tensor
 from torch.optim import Adam
-
 from transformers import PreTrainedTokenizer
-
-from typing import Literal
-
-# 구현하세요!
+from typing import Literal, Optional
 from collections import Counter
 import torch.nn.functional as F
 
 class Word2Vec(nn.Module):
     unigram_dist: Tensor
-    
+
     def __init__(
         self,
         vocab_size: int,
@@ -23,14 +19,14 @@ class Word2Vec(nn.Module):
         num_negatives: int = 5
     ) -> None:
         super().__init__()
-        self.embeddings = nn.Embedding(vocab_size, d_model)
-        self.weight = nn.Linear(d_model, vocab_size, bias=False)
-        self.window_size = window_size
-        self.method = method
-        # 구현하세요!
-        self.num_negatives = num_negatives
-        if method not in ("cbow", "skipgram"):
+        if method not in ('cbow', 'skipgram'):
             raise ValueError("method must be 'cbow' or 'skipgram'")
+        
+        self.embeddings    = nn.Embedding(vocab_size, d_model)
+        self.weight        = nn.Linear(d_model, vocab_size, bias=False)
+        self.window_size   = window_size
+        self.method        = method
+        self.num_negatives = num_negatives
 
     def embeddings_weight(self) -> Tensor:
         return self.embeddings.weight.detach()
@@ -40,148 +36,115 @@ class Word2Vec(nn.Module):
         corpus: list[str],
         tokenizer: PreTrainedTokenizer,
         lr: float,
-        num_epochs: int
+        num_epochs: int,
+        max_sentences: Optional[int] = None
     ) -> None:
-        criterion = nn.CrossEntropyLoss()
-        optimizer = Adam(self.parameters(), lr=lr)
-        # 구현하세요!
 
-        print("▶ fit 시작")
         pad_id = tokenizer.pad_token_id
+        corpus = corpus[:max_sentences] if max_sentences else corpus
         corpus_ids = [
-            tokenizer.encode(
-                text,
-                add_special_tokens=False,
-                truncation=True,
-                max_length=512
-            )
+            tokenizer.encode(text, add_special_tokens=False, truncation=True, max_length=512)
             for text in corpus
         ]
-
-        # negative sampling 분포 준비
-        all_tokens = [t for sent in corpus_ids for t in sent if t != pad_id]
-        freqs = Counter(all_tokens)
+        
+        tokens = [t for sent in corpus_ids for t in sent if t != pad_id]
+        freqs = Counter(tokens)
         dist = torch.zeros(self.embeddings.num_embeddings)
-        for t,c in freqs.items():
-            dist[t] = c**0.75
+        for t, c in freqs.items():
+            dist[t] = c ** 0.75
         dist /= dist.sum()
         self.register_buffer("unigram_dist", dist)
 
-        total_sentences = len(corpus_ids)
-        for epoch in range(1, num_epochs + 1):
-            epoch_start = time.time()
+        optimizer = Adam(self.parameters(), lr=lr)
+
+        total_sents = len(corpus_ids)
+        print(f"Training start: {total_sents} sentences, {num_epochs} epochs")
+        for epoch in range(1, num_epochs+1):
+            start_time = time.time()
             epoch_loss = 0.0
-
-            for idx, sentence in enumerate(corpus_ids, start=1):
-                if len(sentence) < 2:
+            for idx, sent in enumerate(corpus_ids, 1):
+                if len(sent) < 2:
                     continue
-
-                if self.method == "cbow":
-                    loss = self._train_cbow(sentence, pad_id, criterion, optimizer)
+                if self.method == 'cbow':
+                    loss = self._train_cbow(sent, pad_id, optimizer)
                 else:
-                    loss = self._train_skipgram(sentence, pad_id, criterion, optimizer)
+                    loss = self._train_skipgram(sent, pad_id, optimizer)
                 epoch_loss += loss
-
-                # 10문장마다 진행 상황 출력
                 if idx % 10 == 0:
-                    elapsed = time.time() - epoch_start
-                    print(
-                        f"[Epoch {epoch}] {idx}/{total_sentences} sentences, "
-                        f"elapsed {elapsed:.1f}s",
-                        flush=True
-                    )
-
-            avg_loss = epoch_loss / total_sentences
-            epoch_time = time.time() - epoch_start
-            print(
-                f"✔ Epoch {epoch}/{num_epochs} 완료 "
-                f"(time: {epoch_time:.1f}s, avg loss: {avg_loss:.4f})"
-            )
+                    elapsed = time.time() - start_time
+                    print(f" [Epoch {epoch}] {idx}/{total_sents} sents, {elapsed:.1f}s", flush=True)
+            avg_loss = epoch_loss / total_sents
+            elapsed = time.time() - start_time
+            print(f"Epoch {epoch}/{num_epochs} done (time {elapsed:.1f}s, avg_loss {avg_loss:.4f})")
 
     def _train_cbow(
         self,
-        # 구현하세요!
         sentence: list[int],
-        pad_id: int | None,
-        criterion,
+        pad_id: Optional[int],
         optimizer
     ) -> float:
-        # 구현하세요!
-        losses: list[float] = []
-        for idx, target in enumerate(sentence):
+        device = next(self.parameters()).device
+        total_loss = torch.zeros((), device=device)
+        n = 0
+        for i, target in enumerate(sentence):
             if pad_id is not None and target == pad_id:
                 continue
-            start = max(0, idx - self.window_size)
-            end = min(len(sentence), idx + self.window_size + 1)
-            contexts = [
-                sentence[j]
-                for j in range(start, end)
-                if j != idx and (pad_id is None or sentence[j] != pad_id)
-            ]
+            start = max(0, i - self.window_size)
+            end   = min(len(sentence), i + self.window_size + 1)
+            contexts = [sentence[j] for j in range(start, end)
+                        if j != i and (pad_id is None or sentence[j] != pad_id)]
             if not contexts:
                 continue
-
-            ctx_tensor = torch.LongTensor(contexts)
-            ctx_emb = self.embeddings(ctx_tensor)
+            ctx_ids = torch.tensor(contexts, device=device)
+            ctx_emb = self.embeddings(ctx_ids)
             ctx_mean = ctx_emb.mean(dim=0, keepdim=True)
+            target_id = torch.tensor([target], device=device)
             logits = self.weight(ctx_mean)
-            tgt_tensor = torch.LongTensor([target])
-
-            optimizer.zero_grad()
-            loss = criterion(logits, tgt_tensor)
-            loss.backward()
-            optimizer.step()
-            losses.append(loss.item())
-
-        return sum(losses) / len(losses) if losses else 0.0
+            loss = F.cross_entropy(logits, target_id)
+            total_loss += loss
+            n += 1
+        if n == 0:
+            return 0.0
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+        return (total_loss.item() / n)
 
     def _train_skipgram(
         self,
-        # 구현하세요!
         sentence: list[int],
-        pad_id: int | None,
-        criterion,
+        pad_id: Optional[int],
         optimizer
     ) -> float:
-        # 구현하세요!
         device = next(self.parameters()).device
-        losses = []
-        for idx, target in enumerate(sentence):
-            if pad_id is not None and target == pad_id: continue
-            start = max(0, idx - self.window_size)
-            end   = min(len(sentence), idx + self.window_size + 1)
+        total_loss = torch.zeros((), device=device)
+        n = 0
+        for i, tgt in enumerate(sentence):
+            if pad_id is not None and tgt == pad_id:
+                continue
+            start = max(0, i - self.window_size)
+            end   = min(len(sentence), i + self.window_size + 1)
             for j in range(start, end):
-                if j == idx: continue
-                context = sentence[j]
-                if pad_id is not None and context == pad_id: continue
-
-                # positive pair
-                tgt = torch.tensor([target], device=device)
-                ctx = torch.tensor([context], device=device)
-                input_e = self.embeddings(tgt).squeeze(0)
-                pos_e   = self.weight.weight[ctx].squeeze(0)
-
-                # negative samples
-                neg_ids = torch.multinomial(
-                    self.unigram_dist, 
-                    self.num_negatives, 
-                    replacement=True
-                ).to(device)
-                neg_e = self.weight.weight[neg_ids]
-
-                # score 계산
-                pos_score = torch.dot(input_e, pos_e)
-                neg_score = neg_e @ input_e
-
-                # negative sampling loss
-                loss = - (
-                    F.logsigmoid(pos_score)
-                    + torch.sum(F.logsigmoid(-neg_score))
-                )
-
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                losses.append(loss.item())
-
-        return sum(losses) / len(losses) if losses else 0.0
+                if j == i:
+                    continue
+                ctx = sentence[j]
+                if pad_id is not None and ctx == pad_id:
+                    continue
+                # embeddings
+                tgt_emb = self.embeddings(torch.tensor(tgt, device=device))  # (d,)
+                pos_emb = self.weight.weight[ctx]                            # (d,)
+                # negative sampling ids
+                neg_ids = torch.multinomial(self.unigram_dist, self.num_negatives, replacement=True).to(device)
+                neg_emb = self.weight.weight[neg_ids]                        # (K,d)
+                # scores
+                pos_score = torch.dot(tgt_emb, pos_emb)
+                neg_score = neg_emb @ tgt_emb
+                loss = - (F.logsigmoid(pos_score) + torch.sum(F.logsigmoid(-neg_score)))
+                total_loss += loss
+                n += 1
+        if n == 0:
+            return 0.0
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+        return (total_loss.item() / n)
